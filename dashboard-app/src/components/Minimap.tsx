@@ -4,8 +4,15 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Crosshair, Loader2 } from 'lucide-react';
 
+export interface MultiParcel {
+  teryt: string;
+  wkt: string;
+}
+
 interface MinimapProps {
   parcelId: string | null;
+  multiParcels?: MultiParcel[];
+  onParcelSelect?: (teryt: string) => void;
   className?: string;
 }
 
@@ -13,7 +20,6 @@ interface MinimapProps {
 function MapResizer() {
   const map = useMap();
   useEffect(() => {
-    // Delay to let CSS transitions finish
     const timer = setTimeout(() => map.invalidateSize(), 300);
     return () => clearTimeout(timer);
   }, [map]);
@@ -46,7 +52,6 @@ function ParcelLayer({ parcelId }: { parcelId: string | null }) {
           return;
         }
 
-        // Strip SRID prefix if present (e.g. "SRID=4326;POLYGON(...)")
         const raw = lines.slice(1).join('').trim();
         const wkt = raw.replace(/^SRID=\d+;/, '');
         if (!wkt.startsWith('POLYGON') && !wkt.startsWith('MULTIPOLYGON')) {
@@ -69,7 +74,6 @@ function ParcelLayer({ parcelId }: { parcelId: string | null }) {
         layer.addTo(map);
         layerRef.current = layer;
 
-        // Ensure map knows its size before flying
         map.invalidateSize();
 
         const bounds = layer.getBounds();
@@ -90,6 +94,93 @@ function ParcelLayer({ parcelId }: { parcelId: string | null }) {
       </div>
     );
   }
+
+  return null;
+}
+
+/** Renders multiple parcels as markers with polygon highlight on hover */
+function MultiParcelLayer({ parcels, onSelect }: { parcels: MultiParcel[]; onSelect?: (teryt: string) => void }) {
+  const map = useMap();
+  const layersRef = useRef<L.Layer[]>([]);
+
+  useEffect(() => {
+    layersRef.current.forEach(l => map.removeLayer(l));
+    layersRef.current = [];
+
+    if (parcels.length === 0) return;
+
+    const allBounds = L.latLngBounds([]);
+
+    parcels.forEach((parcel) => {
+      const geojson = wktToGeoJSON(parcel.wkt);
+      if (!geojson) return;
+
+      const shortTeryt = parcel.teryt.replace(/\.AR_\d+\./, '.');
+
+      // Polygon (ukryty domyślnie, pokaże się na hover markera)
+      const polyLayer = L.geoJSON(geojson, {
+        style: {
+          color: '#f59e0b',
+          weight: 3,
+          fillColor: '#f59e0b',
+          fillOpacity: 0.25,
+        },
+      });
+
+      // Centroid markera
+      const bounds = polyLayer.getBounds();
+      if (!bounds.isValid()) return;
+      const center = bounds.getCenter();
+      allBounds.extend(bounds);
+
+      const marker = L.marker(center, {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="
+            background: #f59e0b; border: 3px solid #fff; border-radius: 50%;
+            width: 28px; height: 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative; top: -14px; left: -14px;
+          "><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg></div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        }),
+      });
+
+      marker.bindTooltip(shortTeryt, {
+        permanent: false,
+        direction: 'top',
+        offset: [0, -16],
+        className: 'font-mono text-xs font-bold',
+      });
+
+      // Hover → pokaż polygon
+      marker.on('mouseover', () => {
+        polyLayer.addTo(map);
+      });
+      marker.on('mouseout', () => {
+        map.removeLayer(polyLayer);
+      });
+
+      // Click → wybierz
+      marker.on('click', () => {
+        if (onSelect) onSelect(shortTeryt);
+      });
+
+      marker.addTo(map);
+      layersRef.current.push(marker, polyLayer);
+    });
+
+    map.invalidateSize();
+    if (allBounds.isValid()) {
+      map.flyToBounds(allBounds, { padding: [60, 60], maxZoom: 15, duration: 1.2 });
+    }
+
+    return () => {
+      layersRef.current.forEach(l => map.removeLayer(l));
+      layersRef.current = [];
+    };
+  }, [parcels, map, onSelect]);
 
   return null;
 }
@@ -155,9 +246,11 @@ function CenterButton({ parcelId }: { parcelId: string | null }) {
   );
 }
 
-const Minimap: React.FC<MinimapProps> = ({ parcelId, className = '' }) => {
+const Minimap: React.FC<MinimapProps> = ({ parcelId, multiParcels = [], onParcelSelect, className = '' }) => {
   const defaultCenter: [number, number] = [52.0, 19.5];
   const defaultZoom = 6;
+
+  const showMulti = multiParcels.length > 0;
 
   return (
     <div className={`relative rounded-2xl overflow-hidden border border-slate-200/50 shadow-sm ${className}`}>
@@ -173,7 +266,11 @@ const Minimap: React.FC<MinimapProps> = ({ parcelId, className = '' }) => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
         />
         <MapResizer />
-        <ParcelLayer parcelId={parcelId} />
+        {showMulti ? (
+          <MultiParcelLayer parcels={multiParcels} onSelect={onParcelSelect} />
+        ) : (
+          <ParcelLayer parcelId={parcelId} />
+        )}
         <CenterButton parcelId={parcelId} />
       </MapContainer>
     </div>

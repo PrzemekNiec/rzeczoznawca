@@ -41,21 +41,135 @@ function App() {
   const [obrebNumber, setObrebNumber] = useState('');
   const [dzialkaNumber, setDzialkaNumber] = useState('');
 
+  // Multi-parcel state (gdy szukamy bez obrębu)
+  const [multiParcels, setMultiParcels] = useState<Array<{ teryt: string; wkt: string }>>([]);
+  const [multiSearching, setMultiSearching] = useState(false);
+  const [selectedFromMulti, setSelectedFromMulti] = useState(false);
+
   useEffect(() => {
     setLoadingTeryt(true);
-    fetch('/data/teryt_data.json')
-      .then(res => res.json())
-      .then(data => { setTerytData(data); setLoadingTeryt(false); })
-      .catch(err => { console.error("Failed to load TERYT data", err); setLoadingTeryt(false); });
+
+    const DB_NAME = 'teryt-cache';
+    const STORE = 'data';
+    const KEY = 'teryt_data';
+
+    const openDB = (): Promise<IDBDatabase> =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+
+    const getFromCache = (db: IDBDatabase): Promise<any[] | undefined> =>
+      new Promise((resolve) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).get(KEY);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(undefined);
+      });
+
+    const saveToCache = (db: IDBDatabase, data: any[]) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(data, KEY);
+    };
+
+    (async () => {
+      try {
+        const db = await openDB();
+        const cached = await getFromCache(db);
+        if (cached) {
+          setTerytData(cached);
+          setLoadingTeryt(false);
+          return;
+        }
+        const res = await fetch('/data/teryt_data.json');
+        const data = await res.json();
+        setTerytData(data);
+        saveToCache(db, data);
+      } catch (err) {
+        console.error('Failed to load TERYT data', err);
+      } finally {
+        setLoadingTeryt(false);
+      }
+    })();
   }, []);
 
-  const handleAssembleUldk = useCallback(() => {
-    if (selectedGm && obrebNumber && dzialkaNumber) {
+  const handleAssembleUldk = useCallback(async () => {
+    if (!selectedGm || !dzialkaNumber) return;
+
+    // Resetuj multi-parcel state
+    setMultiParcels([]);
+    setSelectedFromMulti(false);
+
+    // Jeśli podano obręb — proste wyszukiwanie (jak wcześniej)
+    if (obrebNumber) {
       const paddedObreb = obrebNumber.padStart(4, '0');
       const assembled = `${selectedGm.id}.${paddedObreb}.${dzialkaNumber}`;
       setSearchValue(assembled);
+      return;
     }
-  }, [selectedGm, obrebNumber, dzialkaNumber]);
+
+    // Brak obrębu → multi-fetch po obrębch 0001–0100 (batch po 10)
+    setMultiSearching(true);
+    const MAX_OBREB = 100;
+    const BATCH_SIZE = 10;
+    const found: Array<{ teryt: string; wkt: string }> = [];
+
+    const fetchOne = async (id: string) => {
+      try {
+        const url = `https://uldk.gugik.gov.pl/?request=GetParcelById&id=${id}&result=teryt,geom_wkt&srid=4326`;
+        const res = await fetch(url);
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        const status = lines[0]?.trim();
+        if (status !== '0' || lines.length < 2) return null;
+        const raw = lines.slice(1).join('').trim();
+        const pipeIdx = raw.indexOf('|');
+        if (pipeIdx === -1) return null;
+        const teryt = raw.substring(0, pipeIdx);
+        const wktRaw = raw.substring(pipeIdx + 1);
+        const wkt = wktRaw.replace(/^SRID=\d+;/, '');
+        if (!wkt.startsWith('POLYGON') && !wkt.startsWith('MULTIPOLYGON')) return null;
+        console.log(`[ULDK] HIT: ${id} → ${teryt}`);
+        return { teryt, wkt };
+      } catch (err) {
+        console.warn(`[ULDK] ERROR for ${id}:`, err);
+        return null;
+      }
+    };
+
+    for (let batch = 0; batch < MAX_OBREB; batch += BATCH_SIZE) {
+      const ids = [];
+      for (let i = batch + 1; i <= Math.min(batch + BATCH_SIZE, MAX_OBREB); i++) {
+        ids.push(`${selectedGm.id}.${String(i).padStart(4, '0')}.${dzialkaNumber}`);
+      }
+      const results = await Promise.all(ids.map(fetchOne));
+      for (const r of results) {
+        if (r) found.push(r);
+      }
+    }
+
+    console.log(`[Multi-fetch] gmina=${selectedGm.id} dzialka=${dzialkaNumber} → found ${found.length}`, found);
+
+    setMultiSearching(false);
+
+    if (found.length === 0) {
+      dismissToast();
+      // Użyj prostego ustawienia — toast zostanie wyświetlony w UI
+      setSearchValue('');
+      alert('Nie znaleziono działki o tym numerze w żadnym obrębie wybranej gminy.');
+    } else if (found.length === 1) {
+      // Dokładnie jedna — ustaw i od razu szukaj
+      const terytClean = found[0].teryt.replace(/\.AR_\d+\./, '.');
+      setSearchValue(terytClean);
+      setMultiParcels([]);
+      search(terytClean);
+    } else {
+      // Kilka — pokaż na mapie do wyboru
+      setMultiParcels(found);
+    }
+  }, [selectedGm, obrebNumber, dzialkaNumber, dismissToast, search]);
 
   // --- AKTYWNA DZIAŁKA ---
   const activeParcelId = useMemo(() => {
@@ -275,13 +389,15 @@ function App() {
                   </select>
 
                   <div className="flex gap-2">
-                    <input placeholder="Nr Obrębu (np. 0005)" value={obrebNumber} onChange={e => setObrebNumber(e.target.value.replace(/\D/g, '').substring(0, 4))} disabled={!selectedMj}
-                      className="w-32 bg-slate-100/50 border border-slate-200 p-2.5 rounded-lg text-sm outline-none focus:border-blue-400 text-slate-700 disabled:opacity-50 transition-colors placeholder:text-slate-400" />
-                    <input placeholder="Nr działki (np. 123/4)" value={dzialkaNumber} onChange={e => setDzialkaNumber(e.target.value)} disabled={!obrebNumber}
-                      className="flex-1 bg-slate-100/50 border border-slate-200 p-2.5 rounded-lg text-sm outline-none focus:border-blue-400 text-slate-700 disabled:opacity-50 transition-colors placeholder:text-slate-400"
+                    <input placeholder="Obręb (opcja)" value={obrebNumber} onChange={e => setObrebNumber(e.target.value.replace(/\D/g, '').substring(0, 4))} disabled={!selectedGm}
+                      className="w-28 bg-slate-100/50 border border-slate-200 p-2.5 rounded-lg text-sm outline-none focus:border-blue-400 text-slate-700 disabled:opacity-50 transition-colors placeholder:text-slate-400" />
+                  </div>
+                  <div className="flex items-center gap-2 w-full">
+                    <input placeholder="Nr działki (np. 123/4)" value={dzialkaNumber} onChange={e => setDzialkaNumber(e.target.value)} disabled={!selectedGm}
+                      className="flex-1 min-w-0 bg-slate-100/50 border border-slate-200 p-2.5 rounded-lg text-sm outline-none focus:border-blue-400 text-slate-700 disabled:opacity-50 transition-colors placeholder:text-slate-400"
                       onKeyDown={e => { if (e.key === 'Enter') handleAssembleUldk(); }} />
-                    <button onClick={handleAssembleUldk} disabled={!selectedGm || !obrebNumber || !dzialkaNumber}
-                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white px-3.5 rounded-lg flex items-center justify-center transition-colors shadow-sm disabled:shadow-none" title="Załaduj ID do paska wyszukiwania">
+                    <button onClick={handleAssembleUldk} disabled={!selectedGm || !dzialkaNumber}
+                      className="w-10 h-10 shrink-0 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg flex items-center justify-center transition-colors shadow-sm disabled:shadow-none" title="Szukaj działki">
                       <Check size={18} />
                     </button>
                   </div>
@@ -368,7 +484,28 @@ function App() {
                 <Toolbar parcelId={activeParcelId} gminaName={activeGminaName} />
 
                 <div className="flex-1 min-h-0 relative">
-                  {!activeParcelId ? (
+                  {multiSearching ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center animate-in fade-in duration-300">
+                      <Loader2 className="w-12 h-12 animate-spin text-amber-500 mb-4" />
+                      <p className="text-sm font-semibold text-slate-600">Szukam działki we wszystkich obrębach...</p>
+                    </div>
+                  ) : multiParcels.length > 0 && !selectedFromMulti ? (
+                    <div className="absolute inset-0 flex flex-col">
+                      <div className="shrink-0 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl mb-3 text-sm text-amber-800 font-medium">
+                        Znaleziono {multiParcels.length} działek o tym numerze. Kliknij właściwą na mapie.
+                      </div>
+                      <Minimap
+                        parcelId={null}
+                        multiParcels={multiParcels}
+                        onParcelSelect={(teryt) => {
+                          setSearchValue(teryt);
+                          setSelectedFromMulti(true);
+                          search(teryt);
+                        }}
+                        className="w-full flex-1"
+                      />
+                    </div>
+                  ) : !activeParcelId ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center animate-in fade-in duration-500">
                       <div className="flex flex-col items-center gap-6 select-none">
                         <img src="/icons/icon-512x512.png" alt="Dashboard Rzeczoznawcy" className="w-56 h-56 rounded-2xl shadow-lg shadow-blue-500/20 object-contain" />
@@ -379,7 +516,17 @@ function App() {
                       </div>
                     </div>
                   ) : (
-                    <Minimap parcelId={cleanParcelId(activeParcelId)} className="w-full h-full" />
+                    <div className="absolute inset-0 flex flex-col">
+                      {selectedFromMulti && multiParcels.length > 1 && (
+                        <button
+                          onClick={() => setSelectedFromMulti(false)}
+                          className="shrink-0 mb-3 self-start px-4 py-2 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors border border-slate-200"
+                        >
+                          ← Wróć do wyboru ({multiParcels.length} działek)
+                        </button>
+                      )}
+                      <Minimap parcelId={cleanParcelId(activeParcelId)} className="w-full flex-1" />
+                    </div>
                   )}
                 </div>
 

@@ -8,12 +8,13 @@ import { Image as ImageIcon } from 'lucide-react';
  */
 
 export interface PhotoData {
-  id: string; 
+  id: string;
   src: string;
   width: number;
   height: number;
-  dateCreated: number; 
+  dateCreated: number;
   file: File;
+  imgObj: HTMLImageElement;
 }
 
 export interface PhotoState {
@@ -30,7 +31,7 @@ type PhotoAction =
   | { type: 'SET_COLUMNS'; payload: number }
   | { type: 'SET_SCALE'; payload: number }
   | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'REORDER_IMAGES'; payload: { startIndex: number; endIndex: number } }
+  | { type: 'REORDER_IMAGES'; payload: { dragId: string; dropId: string } }
   | { type: 'REMOVE_IMAGE'; payload: string }
   | { type: 'SET_TOLERANCE'; payload: number };
 
@@ -61,9 +62,13 @@ function photoReducer(state: PhotoState, action: PhotoAction): PhotoState {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
     case 'REORDER_IMAGES': {
+      const { dragId, dropId } = action.payload;
       const result = Array.from(state.images);
-      const [removed] = result.splice(action.payload.startIndex, 1);
-      result.splice(action.payload.endIndex, 0, removed);
+      const dragIdx = result.findIndex(img => img.id === dragId);
+      const dropIdx = result.findIndex(img => img.id === dropId);
+      if (dragIdx === -1 || dropIdx === -1) return state;
+      const [removed] = result.splice(dragIdx, 1);
+      result.splice(dropIdx, 0, removed);
       return { ...state, images: result };
     }
     case 'REMOVE_IMAGE':
@@ -90,9 +95,8 @@ export const PhotoGenerator: React.FC = () => {
   // Referencja na właściwy kontener tabeli żeby móc ją skopiować (ClipboardItem)
   const exportWrapperRef = useRef<HTMLDivElement>(null);
 
-  // Używamy referencji do przetrzymywania tymczasowych drag-indexów bez wywoływania re-renderu
-  const dragItem = useRef<number | null>(null);
-  const dragOverItem = useRef<number | null>(null);
+  const dragItemId = useRef<string | null>(null);
+  const dragOverItemId = useRef<string | null>(null);
 
   /**
    * --- 1. HANDLE FILES & EXIF & RESIZE ---
@@ -159,14 +163,22 @@ export const PhotoGenerator: React.FC = () => {
              }
           }
 
-          resolve({
-            id: uuidv4(),
-            src: outputSrc,
-            width: outputWidth,
-            height: outputHeight,
-            dateCreated: dateCreated,
-            file: file
-          });
+          // Jeśli był resize, przeładuj img z nowym src
+          if (outputSrc !== e.target?.result) {
+            const resizedImg = new Image();
+            resizedImg.onload = () => {
+              resolve({
+                id: uuidv4(), src: outputSrc, width: outputWidth, height: outputHeight,
+                dateCreated, file, imgObj: resizedImg
+              });
+            };
+            resizedImg.src = outputSrc;
+          } else {
+            resolve({
+              id: uuidv4(), src: outputSrc, width: outputWidth, height: outputHeight,
+              dateCreated, file, imgObj: img
+            });
+          }
         };
         img.onerror = reject;
         img.src = e.target?.result as string;
@@ -193,6 +205,8 @@ export const PhotoGenerator: React.FC = () => {
   const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (dropzoneRef.current) dropzoneRef.current.classList.remove('bg-blue-50/50', 'border-blue-500');
+    // Ignoruj reorder dragi z tabeli
+    if (e.dataTransfer.types.includes('application/x-reorder')) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFiles(e.dataTransfer.files);
     }
@@ -201,23 +215,29 @@ export const PhotoGenerator: React.FC = () => {
   /**
    * --- 3. DRAG / DROP W TABELI (Reordering) ---
    */
-  const handleSortDragStart = (_e: React.DragEvent<HTMLImageElement>, position: number) => {
-    dragItem.current = position;
-  };
- 
-  const handleSortDragEnter = (_e: React.DragEvent<HTMLImageElement>, position: number) => {
-    dragOverItem.current = position;
+  const handleSortDragStart = (e: React.DragEvent<HTMLTableCellElement>, id: string) => {
+    dragItemId.current = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-reorder', id);
   };
 
-  const handleSortDrop = () => {
-    if (dragItem.current !== null && dragOverItem.current !== null && dragItem.current !== dragOverItem.current) {
+  const handleSortDragOver = (e: React.DragEvent<HTMLTableCellElement>, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dragOverItemId.current = id;
+  };
+
+  const handleSortDrop = (e: React.DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragItemId.current && dragOverItemId.current && dragItemId.current !== dragOverItemId.current) {
         dispatch({
           type: 'REORDER_IMAGES',
-          payload: { startIndex: dragItem.current, endIndex: dragOverItem.current }
+          payload: { dragId: dragItemId.current, dropId: dragOverItemId.current }
         });
     }
-    dragItem.current = null;
-    dragOverItem.current = null;
+    dragItemId.current = null;
+    dragOverItemId.current = null;
   };
 
   /**
@@ -227,10 +247,14 @@ export const PhotoGenerator: React.FC = () => {
     if (!exportWrapperRef.current) return;
 
     try {
-      const htmlContent = exportWrapperRef.current.innerHTML;
+      // Klonujemy DOM, usuwamy przyciski (krzyżyki) żeby nie trafiły do Worda
+      const clone = exportWrapperRef.current.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('button').forEach(btn => btn.remove());
+
+      const htmlContent = clone.innerHTML;
       const blobHtml = new Blob([htmlContent], { type: 'text/html' });
       const clipboardItem = new ClipboardItem({ 'text/html': blobHtml });
-      
+
       await navigator.clipboard.write([clipboardItem]);
       alert('Skopiowano tabelę ze zdjęciami do schowka! Możesz teraz wkleić (Ctrl+V) w MS Word.');
     } catch (err) {
@@ -270,117 +294,138 @@ export const PhotoGenerator: React.FC = () => {
 
 
   /**
-   * --- 6. RENDER TABELI MAGIC (Client-side HTML for MS Word Compatibility) ---
+   * --- 6. CANVAS RENDERING (identycznie jak sklejacz.html) ---
+   * Rysuje obrazek na Canvas z białym tłem, centruje, eksportuje jako JPEG dataURL.
+   * Dzięki temu Word dostaje gotowe bitmapy zamiast CSS object-fit.
+   */
+  const renderCanvasImage = (imgData: PhotoData, targetWidth: number, targetHeight: number): string => {
+    const canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return imgData.src;
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+    // Używamy pre-loaded imgObj (jak sklejacz.html) — synchroniczny drawImage
+    const scale = Math.min(targetWidth / imgData.width, targetHeight / imgData.height);
+    const drawW = Math.round(imgData.width * scale);
+    const drawH = Math.round(imgData.height * scale);
+    const dx = Math.round((targetWidth - drawW) / 2);
+    const dy = Math.round((targetHeight - drawH) / 2);
+
+    ctx.drawImage(imgData.imgObj, dx, dy, drawW, drawH);
+    return canvas.toDataURL('image/jpeg', 0.9);
+  };
+
+  const renderEmptyCell = (width: number, height: number): string => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', 0.1);
+  };
+
+  /**
+   * --- 7. RENDER TABELI (Word-compatible Canvas output) ---
    */
   const renderTableContent = () => {
     if (state.images.length === 0) return null;
 
     const cols = state.columns;
     const userScaleFactor = state.scalePercent / 100;
-    
+
     const currentTableWidth = Math.floor(MAX_TABLE_WIDTH * userScaleFactor);
     const cellOuterWidth = Math.floor(currentTableWidth / cols);
     const contentWidth = cellOuterWidth - Math.floor(CELL_PADDING_BORDER * userScaleFactor);
 
-    // KROK: Dzielimy posortowane obrazki na inteligentne grupy.
-    // Aby spełnić wymagania "cięcia" w Wordzie, musimy po każdej grupie ewentualnie dopełnić wiersz.
-    const exifGroups = groupImages();
+    // Sekwencyjne wypełnianie wierszy — kolejność z state (umożliwia ręczny reorder)
     const rows: PhotoData[][] = [];
-    
-    exifGroups.forEach(group => {
-       // Dla zidentyfikowanej grupy czasowej budujemy sekwencyjne wiersze i ucinamy grupę.
-       for (let i = 0; i < group.length; i += cols) {
-         rows.push(group.slice(i, i + cols));
-       }
-       // Następna grupa EXIF zawsze ląduje w nowym, pełnym wierszu pod spodem.
-    });
-
-    // Płaska lista służąca do śledzenia globalnych indexów (umożliwia Drag and Drop wewnątrz gotowego grida)
-    const flatRebuiltOrder = rows.flat();
+    for (let i = 0; i < state.images.length; i += cols) {
+      rows.push(state.images.slice(i, i + cols));
+    }
 
     return (
-      <table 
-        className="word-table" 
-        width={currentTableWidth} 
-        cellSpacing="0" 
-        cellPadding="0" 
+      <table
+        className="word-table"
+        width={currentTableWidth}
+        cellSpacing="0"
+        cellPadding="0"
         style={{ borderCollapse: 'collapse', width: `${currentTableWidth}px`, maxWidth: `${currentTableWidth}px`, tableLayout: 'fixed', margin: '0', background: '#FFF' }}
       >
         <tbody>
           {rows.map((rowImages, rowIndex) => {
-            // Skalowanie proporcji tak żeby wiersz trzymał równy layout w oparciu o wysokość komórek w tym wierszu
             let minHeight = Math.min(...rowImages.map(img => img.height));
             let maxScaledWidth = Math.max(...rowImages.map(img => img.width * (minHeight / img.height)));
-            
+
             let rowTargetHeight = minHeight * userScaleFactor;
             let refMaxW = maxScaledWidth * userScaleFactor;
-            
+
             if (refMaxW > contentWidth) {
                 rowTargetHeight = rowTargetHeight * (contentWidth / refMaxW);
             }
 
             const finalCanvasWidth = contentWidth;
             const finalCanvasHeight = Math.round(rowTargetHeight);
-            
-            // Znalezienie pierwszego indexu tego wiersza z połączonej płaskiej zreogranizowanej tabeli
-            const firstImgOfRow = rowImages[0];
-            const globalStartIndex = flatRebuiltOrder.findIndex(img => img.id === firstImgOfRow.id);
 
             return (
               <tr key={rowIndex}>
-                {/* Wypełnione komórki */}
                 {rowImages.map((imgData, indexInRow) => {
+                  const processedSrc = renderCanvasImage(imgData, finalCanvasWidth, finalCanvasHeight);
                   return (
-                    <td 
+                    <td
                       key={imgData.id}
-                      width={cellOuterWidth} 
-                      valign="middle" 
-                      align="center" 
-                      style={{ border: '1px solid #ccc', padding: `${Math.floor(5*userScaleFactor)}px`, width: `${cellOuterWidth}px`, maxWidth: `${cellOuterWidth}px`, overflow: 'hidden', position: 'relative' }}
+                      width={cellOuterWidth}
+                      valign="middle"
+                      align="center"
+                      className="group/cell"
+                      draggable
+                      onDragStart={(e) => handleSortDragStart(e, imgData.id)}
+                      onDragOver={(e) => handleSortDragOver(e, imgData.id)}
+                      onDrop={(e) => handleSortDrop(e)}
+                      style={{ border: '1px solid #ccc', padding: `${Math.floor(5*userScaleFactor)}px`, width: `${cellOuterWidth}px`, maxWidth: `${cellOuterWidth}px`, overflow: 'hidden', position: 'relative', cursor: 'grab' }}
                     >
-                      {/* X (Usuń) - ukryte przed MS Word poprzez ignorowanie buttonów */}
-                      <div contentEditable={false} style={{ userSelect: 'none', position: 'absolute', top: 2, right: 2, zIndex: 50 }}>
-                         <button 
-                            className="bg-red-500 hover:bg-red-600 outline-none text-white w-6 h-6 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-                            style={{ position: 'absolute', top: 0, right: 0 }}
-                            onClick={() => dispatch({ type: 'REMOVE_IMAGE', payload: imgData.id })}
-                            title="Usuń ujęcie"
-                         >✕</button>
-                      </div>
+                      <button
+                        className="absolute top-1 right-1 z-50 bg-red-500 hover:bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity text-xs font-bold cursor-pointer border-none outline-none shadow-md"
+                        onClick={() => dispatch({ type: 'REMOVE_IMAGE', payload: imgData.id })}
+                        title="Usuń ujęcie"
+                      >✕</button>
 
-                      <img 
-                        src={imgData.src} 
+                      <img
+                        src={processedSrc}
                         width={finalCanvasWidth}
                         height={finalCanvasHeight}
-                        style={{ display: 'block', margin: '0 auto', width: `${finalCanvasWidth}px`, height: `${finalCanvasHeight}px`, objectFit: 'contain', cursor: 'grab' }}
-                        draggable
-                        onDragStart={(e) => handleSortDragStart(e, globalStartIndex + indexInRow)}
-                        onDragEnter={(e) => handleSortDragEnter(e, globalStartIndex + indexInRow)}
-                        onDragEnd={handleSortDrop}
-                        onDragOver={(e) => e.preventDefault()}
-                        title="Przeciągnij, by zamienić kolejność"
+                        style={{ display: 'block', margin: '0 auto', width: `${finalCanvasWidth}px`, height: `${finalCanvasHeight}px` }}
+                        draggable={false}
+                        title="Przeciągnij komórkę, by zamienić kolejność"
                         alt="Photo"
                       />
                     </td>
                   );
                 })}
-                
-                {/* Puste komórki dopychające siatkę wiersza, zapobiega rozciąganiu wiersza w HTML/Word */}
-                {Array.from({ length: cols - rowImages.length }).map((_, emptyIndex) => (
-                   <td 
+
+                {Array.from({ length: cols - rowImages.length }).map((_, emptyIndex) => {
+                  const emptySrc = renderEmptyCell(finalCanvasWidth, finalCanvasHeight);
+                  return (
+                   <td
                      key={`empty-${emptyIndex}`}
-                     width={cellOuterWidth} 
+                     width={cellOuterWidth}
                      style={{ border: '1px solid #ccc', padding: `${Math.floor(5*userScaleFactor)}px`, width: `${cellOuterWidth}px`, maxWidth: `${cellOuterWidth}px` }}
                    >
-                     <img 
-                       src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" 
+                     <img
+                       src={emptySrc}
                        width={finalCanvasWidth}
                        height={finalCanvasHeight}
                        style={{ display: 'block', width: `${finalCanvasWidth}px`, height: `${finalCanvasHeight}px` }}
                        alt="Empty Cell"
                      />
                    </td>
-                ))}
+                  );
+                })}
               </tr>
             );
           })}
@@ -392,13 +437,91 @@ export const PhotoGenerator: React.FC = () => {
 
   return (
     <div className="flex flex-col lg:flex-row w-full h-full text-slate-900 bg-slate-50 font-sans">
-      
-      {/* 40% LEWY PANEL - DRAGZONE (Glassmorphism integration) */}
-      <div className="w-full lg:w-[40%] p-8 lg:p-10 flex flex-col box-border lg:h-full bg-white/60 backdrop-blur border-r border-slate-200/50 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
-        
+
+      {/* 60% LEWY PANEL - CONTROLS & TABLE */}
+      <div className="w-full flex-1 flex flex-col bg-slate-50/50 box-border relative lg:h-full overflow-y-auto isolate">
+
+        {/* Przezroczysty, przyklejony panel górny (Glassmorphism Sticky) */}
+        <div className="sticky top-0 z-20 px-8 py-5 border-b border-slate-200/60 bg-white/70 backdrop-blur-xl flex flex-wrap gap-5 items-center justify-between shadow-sm">
+
+          <div className="flex flex-wrap gap-6 items-center flex-1">
+            <label className="font-semibold text-sm text-slate-600 flex items-center gap-3">
+              Kolumny
+              <input
+                type="number"
+                min="1" max="10"
+                value={state.columns}
+                onChange={(e) => dispatch({ type: 'SET_COLUMNS', payload: parseInt(e.target.value) || 2 })}
+                className="w-16 p-2 rounded-lg bg-slate-100 border border-slate-200 font-bold focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 focus:bg-white outline-none transition-all text-center"
+              />
+            </label>
+            <label className="font-semibold text-sm text-slate-600 flex items-center gap-3">
+              Skala (%)
+              <input
+                type="number"
+                min="10" max="200" step="10"
+                value={state.scalePercent}
+                onChange={(e) => dispatch({ type: 'SET_SCALE', payload: parseInt(e.target.value) || 100 })}
+                className="w-20 p-2 rounded-lg bg-slate-100 border border-slate-200 font-bold focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 focus:bg-white outline-none transition-all text-center"
+              />
+            </label>
+             <label className="font-semibold text-sm text-slate-600 flex items-center gap-3">
+              Odstęp Grupowania (s)
+              <input
+                type="number"
+                min="5" max="3600" step="5"
+                value={state.timeTolerance}
+                onChange={(e) => dispatch({ type: 'SET_TOLERANCE', payload: parseInt(e.target.value) || 60 })}
+                title="Tolerancja chronologiczna pomiędzy ujęciami kwalifikująca ją do nowej gry eksportu"
+                className="w-20 p-2 rounded-lg bg-slate-100 border border-slate-200 font-bold focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 focus:bg-white outline-none transition-all text-center"
+              />
+            </label>
+          </div>
+
+          <div className="flex gap-3 shrink-0">
+            <button
+              onClick={() => dispatch({ type: 'CLEAR_IMAGES' })}
+              title="Wyczyść wszystkie (W)"
+              className="px-6 py-2.5 rounded-xl font-bold text-sm text-red-500 bg-red-50 hover:bg-red-100 transition-all border border-red-100"
+            >
+              Wyczyść
+            </button>
+            <button
+              onClick={copyToClipboard}
+              className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-purple-600 hover:bg-purple-700 shadow-[0_4px_12px_rgba(147,51,234,0.3)] hover:shadow-[0_6px_16px_rgba(147,51,234,0.4)] transition-all hover:-translate-y-px"
+            >
+              Kopiuj Tabelę
+            </button>
+          </div>
+        </div>
+
+        {/* MIEJSCE GENEROWANIA TABELI HTML */}
+        <div className="flex-1 p-8 lg:p-12 flex flex-col items-center">
+            {state.images.length > 0 ? (
+                <div
+                  id="export-wrapper"
+                  ref={exportWrapperRef}
+                  className="bg-white p-12 rounded-2xl shadow-lg border border-slate-200/60 overflow-x-auto w-auto min-w-[680px]"
+                >
+                  {renderTableContent()}
+                </div>
+            ) : (
+                <div className="my-auto mb-32 flex flex-col justify-center items-center text-slate-400">
+                    <ImageIcon className="w-16 h-16 mb-4 opacity-30" />
+                    <h3 className="font-semibold text-xl text-slate-500 mb-1">Pusta matryca podglądu</h3>
+                    <p className="text-sm font-medium">Wrzuć zdjęcia po prawej stronie.</p>
+                </div>
+            )}
+        </div>
+
+      </div>
+
+      {/* 40% PRAWY PANEL - DROPZONE */}
+      <div className="w-full lg:w-[40%] p-8 lg:p-10 flex flex-col box-border lg:h-full bg-white/60 backdrop-blur border-l border-slate-200/50 shadow-[-4px_0_24px_rgba(0,0,0,0.02)] z-10">
+
         <h2 className="text-xl font-bold text-purple-600 mb-6 tracking-tight">Generator Zdjęć</h2>
-        
-        <div 
+
+        <div
           ref={dropzoneRef}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -424,99 +547,21 @@ export const PhotoGenerator: React.FC = () => {
               </div>
             </>
           )}
-          <input 
-            id="file-upload" 
-            type="file" 
-            multiple 
-            accept="image/jpeg, image/png, image/webp" 
-            className="hidden" 
+          <input
+            id="file-upload"
+            type="file"
+            multiple
+            accept="image/jpeg, image/png, image/webp"
+            className="hidden"
             onChange={(e) => {
               if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
-            }} 
+            }}
           />
         </div>
-        
+
         {/* Helper text o dzialaniu */}
         <div className="mt-6 p-4 bg-slate-100/50 rounded-2xl text-xs font-medium text-slate-500 border border-slate-200 border-dashed text-justify leading-relaxed">
            Moduł automatycznie uporządkuje wrzucone ujęcia wykorzystując meta-dane daty i godziny (EXIF). Automatyczne cięcie grup wynosi obecnie: <strong>{state.timeTolerance} sek.</strong>
-        </div>
-
-      </div>
-
-      {/* 60% PRAWY PANEL - CONTROLS & TABLE */}
-      <div className="w-full flex-1 flex flex-col bg-slate-50/50 box-border relative lg:h-full overflow-y-auto isolate">
-        
-        {/* Przezroczysty, przyklejony panel górny (Glassmorphism Sticky) */}
-        <div className="sticky top-0 z-20 px-8 py-5 border-b border-slate-200/60 bg-white/70 backdrop-blur-xl flex flex-wrap gap-5 items-center justify-between shadow-sm">
-          
-          <div className="flex flex-wrap gap-6 items-center flex-1">
-            <label className="font-semibold text-sm text-slate-600 flex items-center gap-3">
-              Kolumny
-              <input 
-                type="number" 
-                min="1" max="10" 
-                value={state.columns}
-                onChange={(e) => dispatch({ type: 'SET_COLUMNS', payload: parseInt(e.target.value) || 2 })}
-                className="w-16 p-2 rounded-lg bg-slate-100 border border-slate-200 font-bold focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 focus:bg-white outline-none transition-all text-center"
-              />
-            </label>
-            <label className="font-semibold text-sm text-slate-600 flex items-center gap-3">
-              Skala (%)
-              <input 
-                type="number" 
-                min="10" max="200" step="10"
-                value={state.scalePercent}
-                onChange={(e) => dispatch({ type: 'SET_SCALE', payload: parseInt(e.target.value) || 100 })}
-                className="w-20 p-2 rounded-lg bg-slate-100 border border-slate-200 font-bold focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 focus:bg-white outline-none transition-all text-center"
-              />
-            </label>
-             <label className="font-semibold text-sm text-slate-600 flex items-center gap-3">
-              Odstęp Grupowania (s)
-              <input 
-                type="number" 
-                min="5" max="3600" step="5"
-                value={state.timeTolerance}
-                onChange={(e) => dispatch({ type: 'SET_TOLERANCE', payload: parseInt(e.target.value) || 60 })}
-                title="Tolerancja chronologiczna pomiędzy ujęciami kwalifikująca ją do nowej gry eksportu"
-                className="w-20 p-2 rounded-lg bg-slate-100 border border-slate-200 font-bold focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 focus:bg-white outline-none transition-all text-center"
-              />
-            </label>
-          </div>
-
-          <div className="flex gap-3 shrink-0">
-            <button 
-              onClick={() => dispatch({ type: 'CLEAR_IMAGES' })}
-              title="Wyczyść wszystkie (W)"
-              className="px-6 py-2.5 rounded-xl font-bold text-sm text-red-500 bg-red-50 hover:bg-red-100 transition-all border border-red-100"
-            >
-              Wyczyść
-            </button>
-            <button 
-              onClick={copyToClipboard}
-              className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-purple-600 hover:bg-purple-700 shadow-[0_4px_12px_rgba(147,51,234,0.3)] hover:shadow-[0_6px_16px_rgba(147,51,234,0.4)] transition-all hover:-translate-y-px"
-            >
-              📋 Kopiuj Tabelę
-            </button>
-          </div>
-        </div>
-
-        {/* MIEJSCE GENEROWANIA TABELI HTML */}
-        <div className="flex-1 p-8 lg:p-12 flex flex-col items-center">
-            {state.images.length > 0 ? (
-                <div 
-                  id="export-wrapper" 
-                  ref={exportWrapperRef}
-                  className="bg-white p-12 rounded-2xl shadow-lg border border-slate-200/60 overflow-x-auto w-auto min-w-[680px]" 
-                >
-                  {renderTableContent()}
-                </div>
-            ) : (
-                <div className="my-auto mb-32 flex flex-col justify-center items-center text-slate-400">
-                    <ImageIcon className="w-16 h-16 mb-4 opacity-30" />
-                    <h3 className="font-semibold text-xl text-slate-500 mb-1">Pusta matryca podglądu</h3>
-                    <p className="text-sm font-medium">Brak załadowanych pakietów zdjęć po lewej stronie.</p>
-                </div>
-            )}
         </div>
 
       </div>
