@@ -13,6 +13,7 @@ interface MinimapProps {
   parcelId: string | null;
   multiParcels?: MultiParcel[];
   onParcelSelect?: (teryt: string) => void;
+  onCentroidReady?: (centroid: { lat: number; lng: number }) => void;
   className?: string;
 }
 
@@ -27,7 +28,7 @@ function MapResizer() {
 }
 
 /** Queries ULDK API for parcel geometry (WGS84) and flies to it */
-function ParcelLayer({ parcelId }: { parcelId: string | null }) {
+function ParcelLayer({ parcelId, onCentroidReady }: { parcelId: string | null; onCentroidReady?: (c: { lat: number; lng: number }) => void }) {
   const map = useMap();
   const layerRef = useRef<L.GeoJSON | null>(null);
   const [loading, setLoading] = useState(false);
@@ -79,6 +80,10 @@ function ParcelLayer({ parcelId }: { parcelId: string | null }) {
         const bounds = layer.getBounds();
         if (bounds.isValid()) {
           map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 18, duration: 1.2 });
+          if (onCentroidReady) {
+            const center = bounds.getCenter();
+            onCentroidReady({ lat: center.lat, lng: center.lng });
+          }
         }
       })
       .catch(err => console.warn('ULDK parcel fetch failed:', err))
@@ -246,7 +251,7 @@ function CenterButton({ parcelId }: { parcelId: string | null }) {
   );
 }
 
-const Minimap: React.FC<MinimapProps> = ({ parcelId, multiParcels = [], onParcelSelect, className = '' }) => {
+const Minimap: React.FC<MinimapProps> = ({ parcelId, multiParcels = [], onParcelSelect, onCentroidReady, className = '' }) => {
   const defaultCenter: [number, number] = [52.0, 19.5];
   const defaultZoom = 6;
 
@@ -269,7 +274,7 @@ const Minimap: React.FC<MinimapProps> = ({ parcelId, multiParcels = [], onParcel
         {showMulti ? (
           <MultiParcelLayer parcels={multiParcels} onSelect={onParcelSelect} />
         ) : (
-          <ParcelLayer parcelId={parcelId} />
+          <ParcelLayer parcelId={parcelId} onCentroidReady={onCentroidReady} />
         )}
         <CenterButton parcelId={parcelId} />
       </MapContainer>
