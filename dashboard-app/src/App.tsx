@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Search, Image as ImageIcon, Loader2, History, Trash2, Copy, Save, Check, MapPinned, X } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Search, Image as ImageIcon, Loader2, History, Trash2, Copy, Save, Check, X } from 'lucide-react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import PhotoGenerator from './components/PhotoGenerator';
 import Toolbar from './components/Toolbar';

@@ -90,7 +90,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ parcelId, gminaName, centroid }) => {
         return (
           <a
             key={btn.label}
-            href={btn.href}
+            href={btn.href || undefined}
             target="_blank"
             rel="noopener noreferrer"
             className={`h-24 flex flex-col items-center justify-center gap-2 rounded-xl border ${colors.border} ${colors.bg} ${colors.hover} backdrop-blur-xl transition-all duration-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 group`}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, WMSTileLayer, LayersControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Crosshair, Loader2 } from 'lucide-react';
@@ -266,10 +266,23 @@ const Minimap: React.FC<MinimapProps> = ({ parcelId, multiParcels = [], onParcel
         zoomControl={true}
         attributionControl={false}
       >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-        />
+        <LayersControl position="topleft">
+          <LayersControl.BaseLayer checked name="Mapa">
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Ortofoto">
+            <WMSTileLayer
+              url="https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
+              layers="Raster"
+              format="image/jpeg"
+              transparent={false}
+              attribution="&copy; GUGiK"
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
         <MapResizer />
         {showMulti ? (
           <MultiParcelLayer parcels={multiParcels} onSelect={onParcelSelect} />

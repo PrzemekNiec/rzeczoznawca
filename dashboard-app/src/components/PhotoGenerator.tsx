@@ -263,34 +263,6 @@ export const PhotoGenerator: React.FC = () => {
     }
   };
 
-  /**
-   * --- 5. GRUPOWANIE WG EXIF DATE ---
-   * Silnik podziału i grupowania chronologicznego ze znalezisk w sklejacz.html i wymogów "Tolerancja czasowa"
-   */
-  const groupImages = () => {
-    if (state.images.length === 0) return [];
-    
-    // Sortujemy dla pewności
-    const sorted = [...state.images].sort((a,b) => a.dateCreated - b.dateCreated);
-    const groups: PhotoData[][] = [];
-    let currentGroup: PhotoData[] = [sorted[0]];
-    const msTolerance = state.timeTolerance * 1000;
-
-    for (let i = 1; i < sorted.length; i++) {
-        const prevTime = sorted[i-1].dateCreated;
-        const currTime = sorted[i].dateCreated;
-        
-        // Jeżeli różnica czasu między następstwem przekracza tolerancję, nowy zbiór/podział (nowy wiersz lub nowa sekcja)
-        if (Math.abs(currTime - prevTime) > msTolerance) {
-            groups.push(currentGroup);
-            currentGroup = [sorted[i]];
-        } else {
-            currentGroup.push(sorted[i]);
-        }
-    }
-    if (currentGroup.length > 0) groups.push(currentGroup);
-    return groups;
-  };
 
 
   /**
@@ -374,7 +346,7 @@ export const PhotoGenerator: React.FC = () => {
 
             return (
               <tr key={rowIndex}>
-                {rowImages.map((imgData, indexInRow) => {
+                {rowImages.map((imgData) => {
                   const processedSrc = renderCanvasImage(imgData, finalCanvasWidth, finalCanvasHeight);
                   return (
                     <td
