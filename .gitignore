@@ -1,0 +1,22 @@
+.claude/
+.obsidian/
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.idea/
+.vscode/
+
+# Large TERYT data files (57MB each) — download separately or regenerate
+dashboard-app/public/data/teryt_data.json
+dashboard-app/src/assets/data/teryt_data.json
+
+# Raw GUS data (147MB) — downloadable from stat.gov.pl
+gus/
+01_Bazy_Danych/TERYT/raw/
