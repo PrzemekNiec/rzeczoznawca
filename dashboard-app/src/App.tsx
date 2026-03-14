@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Search, Image as ImageIcon, Loader2, History, Trash2, Copy, Save, Check, X } from 'lucide-react';
+import { Loader2, History, Trash2, Copy, Save, Check, Search } from 'lucide-react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import PhotoGenerator from './components/PhotoGenerator';
 import Toolbar from './components/Toolbar';
 import Minimap from './components/Minimap';
+import Toast from './components/Toast';
+import Header from './components/Header';
 import { KEYBOARD_SHORTCUTS, NATIONAL_LINKS, cleanParcelId } from './config/links';
 import type { HistoryEntry } from './types/property';
 import { LinkGenerator } from './services/LinkGenerator';
@@ -289,35 +291,7 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-gradient-to-br from-zinc-600 via-zinc-700 to-zinc-800 text-slate-200 overflow-hidden font-sans">
-      {/* HEADER */}
-      <header className="flex-shrink-0 flex items-center bg-white/5 backdrop-blur-2xl border-b border-white/10 px-6 py-4 shadow-lg z-30 relative">
-        <div className="flex items-center gap-3 mr-8">
-          <img src="/icons/icon-512x512.png" alt="Logo" className="w-9 h-9 rounded-lg shadow-md" />
-          <img src="/icons/logo-text-light.svg" alt="Pomocnik Kasi" className="h-9" />
-        </div>
-        <nav className="flex items-center gap-3">
-          <button
-            onClick={() => setActiveTab('search')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 ${
-              activeTab === 'search'
-                ? 'bg-blue-500/20 text-blue-300 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.3)]'
-                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-            }`}
-          >
-            <Search className="w-4 h-4" /> Wyszukiwarka
-          </button>
-          <button
-            onClick={() => setActiveTab('photo')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 ${
-              activeTab === 'photo'
-                ? 'bg-purple-500/20 text-purple-300 shadow-[inset_0_0_0_1px_rgba(192,132,252,0.3)]'
-                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-            }`}
-          >
-            <ImageIcon className="w-4 h-4" /> Generator Zdjęć
-          </button>
-        </nav>
-      </header>
+      <Header activeTab={activeTab} onTabChange={setActiveTab} />
 
       <main className="flex-1 w-full h-full relative overflow-hidden flex">
 
@@ -545,17 +519,7 @@ function App() {
                 )}
               </div>
 
-              {/* TOAST */}
-              {toast && (
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <div className="bg-white/10 backdrop-blur-2xl text-white px-5 py-3 rounded-xl shadow-xl border border-white/10 flex items-center gap-3 max-w-md">
-                    <p className="text-sm">{toast}</p>
-                    <button onClick={dismissToast} className="text-slate-400 hover:text-white transition-colors flex-shrink-0">
-                      <X size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
+              {toast && <Toast message={toast} onDismiss={dismissToast} />}
             </div>
 
           </div>
