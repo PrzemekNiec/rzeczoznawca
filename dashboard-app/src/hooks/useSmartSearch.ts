@@ -49,7 +49,10 @@ async function geocodeNominatim(query: string): Promise<{ lat: number; lon: numb
   const data = await res.json();
   const parsed = NominatimResponseSchema.safeParse(data);
   if (!parsed.success) {
-    console.warn('[Nominatim] Invalid response shape:', parsed.error.message);
+    // Empty array = address not found (expected), malformed = log warning
+    if (!Array.isArray(data) || data.length > 0) {
+      console.warn('[Nominatim] Invalid response shape:', parsed.error.message);
+    }
     return null;
   }
 
