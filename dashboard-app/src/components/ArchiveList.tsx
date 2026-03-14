@@ -92,7 +92,7 @@ const ArchiveList: React.FC<ArchiveListProps> = ({
                   </div>
                 )}
                 {!editingId && (
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                  <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
                     <button onClick={(e) => { e.stopPropagation(); setEditingId(entry.id); setEditNameValue(entry.customName || ''); }}
                       className="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded" title="Edytuj nazwę"><Save size={14} /></button>
                     <button onClick={(e) => { e.stopPropagation(); const text = entry.result.teryt?.formatted || entry.result.kw?.raw; if (text) navigator.clipboard.writeText(text); }}

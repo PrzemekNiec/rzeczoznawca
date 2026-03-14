@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search as SearchIcon } from 'lucide-react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import PhotoGenerator from './components/PhotoGenerator';
 import Toolbar from './components/Toolbar';
@@ -35,6 +35,7 @@ function App() {
 
   const [searchValue, setSearchValue] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Multi-parcel state (from TerytWizard)
   const [multiParcels, setMultiParcels] = useState<Array<{ teryt: string; wkt: string }>>([]);
@@ -82,6 +83,7 @@ function App() {
   // --- PERFORM SEARCH ---
   const performSearch = async () => {
     if (!searchValue.trim()) return;
+    setSidebarOpen(false);
     const { displayValue } = await search(searchValue);
     if (displayValue !== searchValue) {
       setSearchValue(displayValue);
@@ -91,6 +93,7 @@ function App() {
   const loadFromHistory = (entry: HistoryEntry) => {
     setSearchValue(entry.result.teryt?.formatted || entry.input);
     search(entry.result.teryt?.formatted || entry.input);
+    setSidebarOpen(false);
   };
 
   // --- ALT+O ---
@@ -150,7 +153,7 @@ function App() {
         {activeTab === 'search' && (
           <div className="w-full h-full flex flex-col md:flex-row relative">
 
-            <Sidebar>
+            <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)}>
               <div className="p-6 border-b border-white/10 bg-white/[0.03] backdrop-blur-2xl relative z-10 shrink-0">
                 <SearchBar
                   value={searchValue}
@@ -185,7 +188,7 @@ function App() {
 
             {/* PRAWY PANEL — TOOLBAR + LOGO/MINIMAPA */}
             <div className="flex-1 relative flex flex-col isolate overflow-hidden">
-              <div className="w-full flex flex-col h-full p-6">
+              <div className="w-full flex flex-col h-full p-3 md:p-6">
 
                 <Toolbar parcelId={activeParcelId} gminaName={activeGminaName} centroid={parcelCentroid} />
 
@@ -243,6 +246,15 @@ function App() {
 
               {toast && <Toast message={toast} onDismiss={dismissToast} />}
             </div>
+
+            {/* FAB — mobile sidebar toggle */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="fixed bottom-4 right-4 z-50 md:hidden w-14 h-14 bg-blue-500 hover:bg-blue-400 text-white rounded-full shadow-xl flex items-center justify-center transition-colors"
+              aria-label="Otwórz panel wyszukiwania"
+            >
+              <SearchIcon size={24} />
+            </button>
 
           </div>
         )}
