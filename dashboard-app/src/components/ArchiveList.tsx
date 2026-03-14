@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { History, Trash2, Copy, Save, Check } from 'lucide-react';
 import type { HistoryEntry } from '../types/property';
-import type { ResolverResult } from '../types/property';
 
 interface ArchiveListProps {
   history: HistoryEntry[];

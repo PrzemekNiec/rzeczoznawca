@@ -14,7 +14,7 @@ interface SearchBarProps {
   onSearch: () => void;
   isSearching: boolean;
   statusMessage: string;
-  inputCategory: string;
+  inputCategory: string | null;
   searchStatus: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }
