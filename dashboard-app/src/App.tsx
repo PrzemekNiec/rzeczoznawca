@@ -14,6 +14,7 @@ import { KEYBOARD_SHORTCUTS, NATIONAL_LINKS, cleanParcelId } from './config/link
 import type { HistoryEntry } from './types/property';
 import { LinkGenerator } from './services/LinkGenerator';
 import { useSmartSearch } from './hooks/useSmartSearch';
+import { useTerytGminaName } from './hooks/useTerytGminaName';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'search' | 'photo'>('search');
@@ -74,11 +75,15 @@ function App() {
   // Reset centroidu przy zmianie działki (Minimap dostarczy nowy)
   useEffect(() => { setParcelCentroid(null); }, [activeParcelId]);
 
-  const activeGminaName = useMemo(() => {
+  const wizardGminaName = useMemo(() => {
     if (wizardGmina?.simple_name) return wizardGmina.simple_name;
     if (wizardGmina?.name) return wizardGmina.name.replace(/\s*\(.*\)$/, '');
     return '';
   }, [wizardGmina]);
+
+  // Fallback: lookup gmina name from IndexedDB teryt_data when wizard wasn't used
+  const lookupGminaName = useTerytGminaName(activeParcelId);
+  const activeGminaName = wizardGminaName || lookupGminaName;
 
   // --- PERFORM SEARCH ---
   const performSearch = async () => {
