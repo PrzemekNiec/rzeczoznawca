@@ -9,6 +9,7 @@ import Header from './components/Header';
 import SearchBar from './components/SearchBar';
 import ArchiveList from './components/ArchiveList';
 import TerytWizard from './components/TerytWizard';
+import Sidebar from './components/Sidebar';
 import { KEYBOARD_SHORTCUTS, NATIONAL_LINKS, cleanParcelId } from './config/links';
 import type { HistoryEntry } from './types/property';
 import { LinkGenerator } from './services/LinkGenerator';
@@ -149,9 +150,7 @@ function App() {
         {activeTab === 'search' && (
           <div className="w-full h-full flex flex-col md:flex-row relative">
 
-            {/* LEWY PANEL — SIDEBAR */}
-            <div className="w-full md:w-[380px] flex-shrink-0 bg-white/5 backdrop-blur-2xl border-r border-white/10 flex flex-col h-full z-20 shadow-[4px_0_24px_rgba(0,0,0,0.15)]">
-
+            <Sidebar>
               <div className="p-6 border-b border-white/10 bg-white/[0.03] backdrop-blur-2xl relative z-10 shrink-0">
                 <SearchBar
                   value={searchValue}
@@ -182,8 +181,7 @@ function App() {
                 onUpdateName={updateHistoryName}
                 onClearAll={clearHistory}
               />
-
-            </div>
+            </Sidebar>
 
             {/* PRAWY PANEL — TOOLBAR + LOGO/MINIMAPA */}
             <div className="flex-1 relative flex flex-col isolate overflow-hidden">
