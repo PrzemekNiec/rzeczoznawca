@@ -29,12 +29,12 @@ export class LinkGenerator {
     const clean = cleanParcelId(teryt);
     // Katowice (TERYT 2469) - System Custom emapa.katowice.eu
     if (teryt.startsWith('2469')) {
-      return `https://emapa.katowice.eu?identifyParcel=${clean}`;
+      return `https://emapa.katowice.eu?identifyParcel=${encodeURIComponent(clean)}`;
     }
-    
+
     // Kraków (TERYT 1261) - System Custom MSIP
     if (teryt.startsWith('1261')) {
-      return `https://msip.krakow.pl/?parcels=${clean}`;
+      return `https://msip.krakow.pl/?parcels=${encodeURIComponent(clean)}`;
     }
 
     return null;
@@ -64,7 +64,7 @@ export class LinkGenerator {
         if (mapping.system === 'e-mapa') {
           // KROK 4: Jeśli baseUrl jest zdefiniowany na sztywno, użyj go zamiast generowanej subdomeny
           if (mapping.baseUrl) {
-            municipalLink = `${mapping.baseUrl}?identifyParcel=${cleanParcelId(teryt)}`;
+            municipalLink = `${mapping.baseUrl}?identifyParcel=${encodeURIComponent(cleanParcelId(teryt))}`;
           } else {
             municipalLink = MUNICIPAL_SYSTEMS['e-mapa'](mapping.slug, teryt);
           }
@@ -81,13 +81,15 @@ export class LinkGenerator {
     // 2. Budowanie linków specjalistycznych na podstawie XY
     let specializedLinks: SpecializedLinks | null = null;
     if (coords && typeof coords.x === 'number' && typeof coords.y === 'number') {
+      const cx = encodeURIComponent(String(coords.x));
+      const cy = encodeURIComponent(String(coords.y));
       specializedLinks = {
         // NID - Narodowy Instytut Dziedzictwa
-        nid: `https://mapy.zabytek.gov.pl/nid/?x=${coords.x}&y=${coords.y}&zoom=14`,
+        nid: `https://mapy.zabytek.gov.pl/nid/?x=${cx}&y=${cy}&zoom=14`,
         // BDL - Bank Danych o Lasach
-        bdl: `https://www.bdl.lasy.gov.pl/portal/mapy?x=${coords.x}&y=${coords.y}&zoom=14`,
+        bdl: `https://www.bdl.lasy.gov.pl/portal/mapy?x=${cx}&y=${cy}&zoom=14`,
         // ISOK - Informatyczny System Osłony Kraju (Wody Polskie)
-        isok: `https://wody.isok.gov.pl/imap_kzgw/?x=${coords.x}&y=${coords.y}&zoom=10`
+        isok: `https://wody.isok.gov.pl/imap_kzgw/?x=${cx}&y=${cy}&zoom=10`
       };
     }
 

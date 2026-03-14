@@ -29,11 +29,8 @@ class ErrorBoundary extends React.Component<Props, State> {
         <div className="flex flex-col items-center justify-center h-screen bg-zinc-800 text-white p-8">
           <h1 className="text-2xl font-bold text-red-400 mb-4">Coś poszło nie tak</h1>
           <p className="text-sm text-zinc-400 mb-6 max-w-md text-center">
-            Wystąpił nieoczekiwany błąd. Odśwież stronę, aby kontynuować.
+            Wystąpił nieoczekiwany problem z aplikacją. Odśwież stronę, aby kontynuować.
           </p>
-          <pre className="text-xs text-red-300 bg-red-500/10 p-4 rounded-xl max-w-lg overflow-auto mb-6 border border-red-500/20">
-            {this.state.error?.message}
-          </pre>
           <button
             onClick={() => window.location.reload()}
             className="px-6 py-2.5 bg-blue-500 hover:bg-blue-400 rounded-xl font-semibold transition-colors"

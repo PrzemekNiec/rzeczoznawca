@@ -1,7 +1,16 @@
 import { useState, useCallback, useRef } from 'react';
+import { z } from 'zod';
 import type { ResolverResult, HistoryEntry } from '../types/property';
 import { resolveProperty, cleanInput } from '../services/PropertyResolver';
 import { v4 as uuidv4 } from 'uuid';
+
+// ─── Zod schemas for API response validation ─────────────────────
+const NominatimResultSchema = z.object({
+  lat: z.string(),
+  lon: z.string(),
+  display_name: z.string(),
+});
+const NominatimResponseSchema = z.array(NominatimResultSchema).min(1);
 
 // ─── Heuristic patterns ─────────────────────────────────────────
 const FULL_TERYT_REGEX = /^\d{6}_\d\.\d{4}\..+$/;
@@ -21,6 +30,7 @@ interface SmartSearchState {
 }
 
 const STORAGE_KEY = 'property_search_history';
+const MAX_HISTORY_ITEMS = 100;
 
 // ─── Nominatim geocoding ─────────────────────────────────────────
 async function geocodeNominatim(query: string): Promise<{ lat: number; lon: number; displayName: string } | null> {
@@ -37,12 +47,17 @@ async function geocodeNominatim(query: string): Promise<{ lat: number; lon: numb
   if (!res.ok) return null;
 
   const data = await res.json();
-  if (!data.length) return null;
+  const parsed = NominatimResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    console.warn('[Nominatim] Invalid response shape:', parsed.error.message);
+    return null;
+  }
 
+  const first = parsed.data[0];
   return {
-    lat: parseFloat(data[0].lat),
-    lon: parseFloat(data[0].lon),
-    displayName: data[0].display_name,
+    lat: parseFloat(first.lat),
+    lon: parseFloat(first.lon),
+    displayName: first.display_name,
   };
 }
 
@@ -114,6 +129,7 @@ export function useSmartSearch() {
         }, ...newHistory];
       }
 
+      newHistory = newHistory.slice(0, MAX_HISTORY_ITEMS);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newHistory));
       return newHistory;
     });

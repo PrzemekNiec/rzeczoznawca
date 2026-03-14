@@ -142,19 +142,22 @@ export const MOCK_REGIONS: Record<string, { id: string; name: string }[]> = {
 
 export const TERYT_MAPPINGS: Record<string, { system: string; slug: string; baseUrl?: string }> = {};
 
+// Validate subdomain slug — only safe chars allowed (a-z, 0-9, -)
+const safeDomainSlug = (slug: string): string => slug.replace(/[^a-z0-9-]/gi, '').toLowerCase();
+
 export const MUNICIPAL_SYSTEMS = {
-  'e-mapa': (slug: string, teryt: string) => `https://${slug}.e-mapa.net?identifyParcel=${cleanParcelId(teryt)}`,
-  'geoportal2': (slug: string, teryt: string) => `https://${slug}.geoportal2.pl/map/www/mapa.php?dzialka=${cleanParcelId(teryt)}`,
-  'iMap': (slug: string, teryt: string) => `https://sip.gison.pl/${slug}?dzialka=${cleanParcelId(teryt)}`
+  'e-mapa': (slug: string, teryt: string) => `https://${safeDomainSlug(slug)}.e-mapa.net?identifyParcel=${encodeURIComponent(cleanParcelId(teryt))}`,
+  'geoportal2': (slug: string, teryt: string) => `https://${safeDomainSlug(slug)}.geoportal2.pl/map/www/mapa.php?dzialka=${encodeURIComponent(cleanParcelId(teryt))}`,
+  'iMap': (slug: string, teryt: string) => `https://sip.gison.pl/${safeDomainSlug(slug)}?dzialka=${encodeURIComponent(cleanParcelId(teryt))}`
 };
 
 export const NATIONAL_LINKS = {
-  geoportal: (teryt: string) => `https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${cleanParcelId(teryt)}`,
-  ekw: (kodSadu: string, numer: string, cyfra: string) => `https://przegladarka-ekw.ms.gov.pl/eukw_prz/KsiegiWieczyste/wyszukiwanieKW?komunikaty=true&kodWydzialuInput=${kodSadu}&nrKsiegiWieczystej=${numer}&cyfraKontrolna=${cyfra}`,
+  geoportal: (teryt: string) => `https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(cleanParcelId(teryt))}`,
+  ekw: (kodSadu: string, numer: string, cyfra: string) => `https://przegladarka-ekw.ms.gov.pl/eukw_prz/KsiegiWieczyste/wyszukiwanieKW?komunikaty=true&kodWydzialuInput=${encodeURIComponent(kodSadu)}&nrKsiegiWieczystej=${encodeURIComponent(numer)}&cyfraKontrolna=${encodeURIComponent(cyfra)}`,
   gunb: () => `https://wyszukiwarka.gunb.gov.pl/`,
   // format: https://e-mapa.net/plan_ogolny/[teryt6]-[gmina-slug]?dzialka=[cleanId]
   planyOgolne: (teryt6: string, gminaSlug: string, parcelId: string) =>
-    `https://e-mapa.net/plan_ogolny/${teryt6}-${gminaSlug.toLowerCase()}?dzialka=${cleanParcelId(parcelId)}`,
+    `https://e-mapa.net/plan_ogolny/${encodeURIComponent(teryt6)}-${safeDomainSlug(gminaSlug)}?dzialka=${encodeURIComponent(cleanParcelId(parcelId))}`,
 };
 
 // --- 3. GENERATORY LINKÓW ---
@@ -163,7 +166,7 @@ export const NATIONAL_LINKS = {
  * Link do e-mapa.net (Nowy uproszczony format bezpośredni)
  */
 export const getEMapaUrl = (teryt: string): string => {
-  return `https://e-mapa.net/polska/${cleanParcelId(teryt)}`;
+  return `https://e-mapa.net/polska/${encodeURIComponent(cleanParcelId(teryt))}`;
 };
 
 /**

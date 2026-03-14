@@ -1,4 +1,19 @@
+import { z } from 'zod'
 import type { ResolverResult, TerytData, KWData } from '@/types/property'
+
+// ─── Zod schemas for GUGiK geocoder response ─────────────────────
+const GugikGeocodeResultSchema = z.object({
+  x: z.string(),
+  y: z.string(),
+  city: z.string().optional(),
+  street: z.string().optional(),
+  number: z.string().optional(),
+})
+
+const GugikGeocodeResponseSchema = z.object({
+  results: z.record(z.string(), GugikGeocodeResultSchema),
+  'found objects': z.number(),
+})
 
 // ─── Regex Patterns ────────────────────────────────────────────────
 const KW_REGEX = /^[A-Z]{2}[0-9A-Z]{2}\/\d{8}\/\d$/
@@ -39,7 +54,7 @@ function tryKW(input: string): ResolverResult | null {
 // ─── 3. TERYT Strategy ────────────────────────────────────────────
 function parseTerytString(teryt: string): TerytData {
   const match = teryt.match(FULL_TERYT_REGEX)
-  if (!match) throw new Error(`Nie można sparsować TERYT: ${teryt}`)
+  if (!match) throw new Error('Nie można sparsować kodu TERYT. Sprawdź format wejścia.')
 
   const [, woj, pow, gm, typ, obreb, dzialka] = match
   return {
@@ -131,9 +146,6 @@ function tryPartialParcel(input: string): ResolverResult | null {
 interface GeocodeResult {
   x: string
   y: string
-  city: string
-  street: string
-  number: string
 }
 
 async function geocodeAddress(address: string): Promise<GeocodeResult> {
@@ -145,18 +157,19 @@ async function geocodeAddress(address: string): Promise<GeocodeResult> {
   }
 
   const data = await response.json()
+  const parsed = GugikGeocodeResponseSchema.safeParse(data)
 
-  if (!data.results || data['found objects'] === 0) {
+  if (!parsed.success) {
+    console.warn('[GUGiK] Invalid response shape:', parsed.error.message)
+    throw new Error('Nieprawidłowa odpowiedź z serwera GUGiK.')
+  }
+
+  if (parsed.data['found objects'] === 0 || !parsed.data.results['1']) {
     throw new Error('Nie znaleziono adresu w bazie GUGiK.')
   }
 
-  // Pick first (highest accuracy) result
-  const first = data.results['1'] as GeocodeResult
-  if (!first?.x || !first?.y) {
-    throw new Error('Brak współrzędnych w odpowiedzi geokodowania.')
-  }
-
-  return first
+  const first = parsed.data.results['1']
+  return { x: first.x, y: first.y }
 }
 
 async function getParcelByXY(x: string, y: string): Promise<string> {
@@ -200,7 +213,7 @@ async function tryAddress(input: string): Promise<ResolverResult> {
     return {
       inputType: 'address',
       address: input,
-      error: `ULDK zwrócił nieoczekiwany format: "${terytRaw}"`,
+      error: 'ULDK zwrócił nieoczekiwany format odpowiedzi.',
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Nieznany błąd'
