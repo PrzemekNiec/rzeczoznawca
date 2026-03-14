@@ -69,7 +69,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ parcelId, gminaName, centroid }) => {
   };
 
   return (
-    <div className="grid grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
       {buttons.map((btn) => {
         const colors = colorMap[btn.color];
         const isActive = !!btn.href;
@@ -78,7 +78,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ parcelId, gminaName, centroid }) => {
           return (
             <div
               key={btn.label}
-              className="h-24 flex flex-col items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] opacity-40 cursor-not-allowed"
+              className="h-16 md:h-24 flex flex-col items-center justify-center gap-1 md:gap-2 rounded-xl border border-white/5 bg-white/[0.02] opacity-40 cursor-not-allowed"
               title="Wprowadź działkę w panelu bocznym"
             >
               <span className="text-slate-500">{btn.icon}</span>
@@ -93,7 +93,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ parcelId, gminaName, centroid }) => {
             href={btn.href || undefined}
             target="_blank"
             rel="noopener noreferrer"
-            className={`h-24 flex flex-col items-center justify-center gap-2 rounded-xl border ${colors.border} ${colors.bg} ${colors.hover} backdrop-blur-xl transition-all duration-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 group`}
+            className={`h-16 md:h-24 flex flex-col items-center justify-center gap-1 md:gap-2 rounded-xl border ${colors.border} ${colors.bg} ${colors.hover} backdrop-blur-xl transition-all duration-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 group`}
             title={btn.label}
           >
             <span className={`${colors.icon} group-hover:scale-110 transition-transform`}>
