@@ -5,14 +5,6 @@ import type { ResolverResult, TerytData, KWData } from '@/types/property'
 const GugikGeocodeResultSchema = z.object({
   x: z.string(),
   y: z.string(),
-  city: z.string().optional(),
-  street: z.string().optional(),
-  number: z.string().optional(),
-})
-
-const GugikGeocodeResponseSchema = z.object({
-  results: z.record(z.string(), GugikGeocodeResultSchema),
-  'found objects': z.number(),
 })
 
 // ─── Regex Patterns ────────────────────────────────────────────────
@@ -157,19 +149,20 @@ async function geocodeAddress(address: string): Promise<GeocodeResult> {
   }
 
   const data = await response.json()
-  const parsed = GugikGeocodeResponseSchema.safeParse(data)
 
-  if (!parsed.success) {
-    console.warn('[GUGiK] Invalid response shape:', parsed.error.message)
-    throw new Error('Nieprawidłowa odpowiedź z serwera GUGiK.')
-  }
-
-  if (parsed.data['found objects'] === 0 || !parsed.data.results['1']) {
+  if (!data.results || data['found objects'] === 0) {
     throw new Error('Nie znaleziono adresu w bazie GUGiK.')
   }
 
-  const first = parsed.data.results['1']
-  return { x: first.x, y: first.y }
+  const firstRaw = data.results['1']
+  const parsed = GugikGeocodeResultSchema.safeParse(firstRaw)
+
+  if (!parsed.success) {
+    console.warn('[GUGiK] Invalid result shape:', parsed.error.message)
+    throw new Error('Nieprawidłowa odpowiedź z serwera GUGiK.')
+  }
+
+  return { x: parsed.data.x, y: parsed.data.y }
 }
 
 async function getParcelByXY(x: string, y: string): Promise<string> {

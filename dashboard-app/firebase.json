@@ -19,7 +19,7 @@
           { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.tile.openstreetmap.org https://*.geoportal.gov.pl; connect-src 'self' https://nominatim.openstreetmap.org https://uldk.gugik.gov.pl https://services.gugik.gov.pl https://mapy.geoportal.gov.pl; font-src 'self'; frame-ancestors 'none'"
+            "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.geoportal.gov.pl https://*.gugik.gov.pl; connect-src 'self' https://nominatim.openstreetmap.org https://uldk.gugik.gov.pl https://services.gugik.gov.pl https://*.geoportal.gov.pl https://*.tile.openstreetmap.org; font-src 'self'; worker-src 'self'; frame-ancestors 'none'"
           }
         ]
       }
