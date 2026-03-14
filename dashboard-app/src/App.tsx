@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, History, Trash2, Copy, Save, Check, Search } from 'lucide-react';
+import { Loader2, History, Trash2, Copy, Save, Check } from 'lucide-react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import PhotoGenerator from './components/PhotoGenerator';
 import Toolbar from './components/Toolbar';
 import Minimap from './components/Minimap';
 import Toast from './components/Toast';
 import Header from './components/Header';
+import SearchBar from './components/SearchBar';
 import { KEYBOARD_SHORTCUTS, NATIONAL_LINKS, cleanParcelId } from './config/links';
 import type { HistoryEntry } from './types/property';
 import { LinkGenerator } from './services/LinkGenerator';
@@ -280,15 +281,6 @@ function App() {
   // --- Status helpers ---
   const isSearching = searchStatus === 'searching' || searchStatus === 'geocoding' || searchStatus === 'resolving';
 
-  // Category badge
-  const categoryLabel: Record<string, string> = {
-    teryt: 'TERYT',
-    parcel: 'Nr działki',
-    address: 'Adres',
-    kw: 'Księga Wieczysta',
-    link: 'Link',
-  };
-
   return (
     <div className="flex flex-col h-screen w-full bg-gradient-to-br from-zinc-600 via-zinc-700 to-zinc-800 text-slate-200 overflow-hidden font-sans">
       <Header activeTab={activeTab} onTabChange={setActiveTab} />
@@ -303,38 +295,16 @@ function App() {
 
               {/* Smart Search Bar */}
               <div className="p-6 border-b border-white/10 bg-white/[0.03] backdrop-blur-2xl relative z-10 shrink-0">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold tracking-wider text-zinc-300 uppercase">Smart Search</h3>
-                  {inputCategory && searchStatus !== 'idle' && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full">
-                      {categoryLabel[inputCategory] || inputCategory}
-                    </span>
-                  )}
-                </div>
-                <div className="relative group mb-2">
-                  <input
-                    ref={searchInputRef}
-                    value={searchValue}
-                    onChange={(e) => setSearchValue(e.target.value)}
-                    placeholder="TERYT, nr działki, KW lub adres..."
-                    className="w-full bg-white/10 border border-white/10 p-4 pr-12 rounded-xl text-[15px] font-medium text-white transition-all duration-200 focus:bg-white/15 focus:border-blue-400/50 focus:ring-4 focus:ring-blue-400/10 focus:outline-none placeholder-zinc-400 shadow-sm group-hover:border-white/20"
-                    onKeyDown={(e) => { if (e.key === 'Enter') performSearch(); }}
-                  />
-                  <button
-                    onClick={performSearch}
-                    disabled={isSearching || !searchValue.trim()}
-                    className="absolute right-2 top-2 bottom-2 bg-blue-500 hover:bg-blue-400 text-white rounded-lg px-3 flex items-center justify-center transition-all duration-200 disabled:opacity-30 disabled:hover:bg-blue-500 shadow-md"
-                    title="Szukaj (Enter)"
-                  >
-                    {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
-                  </button>
-                </div>
-                {/* Status message */}
-                {isSearching && statusMessage && (
-                  <p className="text-xs text-blue-400 mt-1 flex items-center gap-1.5">
-                    <Loader2 size={12} className="animate-spin" /> {statusMessage}
-                  </p>
-                )}
+                <SearchBar
+                  value={searchValue}
+                  onChange={setSearchValue}
+                  onSearch={performSearch}
+                  isSearching={isSearching}
+                  statusMessage={statusMessage}
+                  inputCategory={inputCategory}
+                  searchStatus={searchStatus}
+                  inputRef={searchInputRef}
+                />
 
                 {/* Kreator TERYT */}
                 <h3 className="text-sm font-bold tracking-wider text-zinc-300 mb-3 uppercase border-t pt-4 mt-4 border-white/10 flex justify-between items-center">
