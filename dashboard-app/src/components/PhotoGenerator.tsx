@@ -88,7 +88,7 @@ function photoReducer(state: PhotoState, action: PhotoAction): PhotoState {
 const MAX_TABLE_WIDTH = 600;
 const CELL_PADDING_BORDER = 12;
 // Mnożnik rozdzielczości canvas — 2x daje ~150 DPI w Wordzie (zamiast ~72 DPI)
-const CANVAS_DPI_SCALE = 2;
+const CANVAS_DPI_SCALE = 3;
 
 export const PhotoGenerator: React.FC = () => {
   const [state, dispatch] = useReducer(photoReducer, initialState);
@@ -280,6 +280,9 @@ export const PhotoGenerator: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return imgData.src;
 
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -291,7 +294,7 @@ export const PhotoGenerator: React.FC = () => {
     const dy = Math.round((canvas.height - drawH) / 2);
 
     ctx.drawImage(imgData.imgObj, dx, dy, drawW, drawH);
-    return canvas.toDataURL('image/jpeg', 0.92);
+    return canvas.toDataURL('image/jpeg', 0.95);
   };
 
   const renderEmptyCell = (width: number, height: number): string => {
