@@ -87,6 +87,8 @@ function photoReducer(state: PhotoState, action: PhotoAction): PhotoState {
 // Stałe bazowe formatu A4 w MS Word, jak w tradycyjnym sklejacz.html
 const MAX_TABLE_WIDTH = 600;
 const CELL_PADDING_BORDER = 12;
+// Mnożnik rozdzielczości canvas — 2x daje ~150 DPI w Wordzie (zamiast ~72 DPI)
+const CANVAS_DPI_SCALE = 2;
 
 export const PhotoGenerator: React.FC = () => {
   const [state, dispatch] = useReducer(photoReducer, initialState);
@@ -272,23 +274,24 @@ export const PhotoGenerator: React.FC = () => {
    */
   const renderCanvasImage = (imgData: PhotoData, targetWidth: number, targetHeight: number): string => {
     const canvas = document.createElement('canvas');
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
+    // Renderujemy w wyższej rozdzielczości (2x) — Word dostaje więcej pikseli do druku
+    canvas.width = targetWidth * CANVAS_DPI_SCALE;
+    canvas.height = targetHeight * CANVAS_DPI_SCALE;
     const ctx = canvas.getContext('2d');
     if (!ctx) return imgData.src;
 
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Używamy pre-loaded imgObj (jak sklejacz.html) — synchroniczny drawImage
+    // Skalujemy kontekst rysowania, żeby logika pozycjonowania pozostała bez zmian
     const scale = Math.min(targetWidth / imgData.width, targetHeight / imgData.height);
-    const drawW = Math.round(imgData.width * scale);
-    const drawH = Math.round(imgData.height * scale);
-    const dx = Math.round((targetWidth - drawW) / 2);
-    const dy = Math.round((targetHeight - drawH) / 2);
+    const drawW = Math.round(imgData.width * scale * CANVAS_DPI_SCALE);
+    const drawH = Math.round(imgData.height * scale * CANVAS_DPI_SCALE);
+    const dx = Math.round((canvas.width - drawW) / 2);
+    const dy = Math.round((canvas.height - drawH) / 2);
 
     ctx.drawImage(imgData.imgObj, dx, dy, drawW, drawH);
-    return canvas.toDataURL('image/jpeg', 0.9);
+    return canvas.toDataURL('image/jpeg', 0.92);
   };
 
   const renderEmptyCell = (width: number, height: number): string => {
